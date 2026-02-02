@@ -1,36 +1,55 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <title>Nexordle Grid</title>
+
   <style>
-    body {
+    :root {
+      --cell-size: 80px; /* 🔧 change à 72 / 80 / 96 si tu veux */
+      --gap: 6px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
       margin: 0;
-      padding: 20px;
-      background: transparent;
-      display: inline-block;
+      padding: 0;
+      background: transparent; /* ⛔ pas de fond noir */
+    }
+
+    body {
+      display: inline-block; /* ⛔ pas de centrage inutile */
     }
 
     .grid {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+      display: grid;
+      grid-template-columns: repeat(var(--cols), var(--cell-size));
+      gap: var(--gap);
     }
 
-    .row {
-      display: flex;
-      gap: 6px;
+    .cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
     }
 
-    img {
-      width: 64px;
-      height: 64px;
-      image-rendering: crisp-edges;
+    .cell img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;
     }
   </style>
 </head>
+
 <body>
-  <div class="grid">
-    {{GRID}}
+  <div
+    class="grid"
+    style="--cols: {{COLS}}"
+  >
+    {{CELLS}}
   </div>
 </body>
 </html>
