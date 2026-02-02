@@ -41,7 +41,10 @@ app.post("/render", async (req, res) => {
   <div class="grid">
     ${grid.flat().map(url => `
       <div class="cell">
-        <img src="${url}" />
+        <img 
+      src="${url}"
+      onerror="this.onerror=null;this.src='https://cdn.discordapp.com/emojis/1432095835692470427.webp'"
+    />
       </div>
     `).join("")}
   </div>
