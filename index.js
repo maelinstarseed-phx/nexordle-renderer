@@ -23,7 +23,7 @@ app.get("/", (_, res) => {
   res.send("Nexordle renderer OK");
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log("Renderer running on port", PORT)
 );
