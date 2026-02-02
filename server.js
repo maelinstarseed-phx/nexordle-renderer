@@ -4,6 +4,23 @@ import puppeteer from "puppeteer";
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
+/* ─────────────────────────────────────────────
+   🧠 CACHE DU BROWSER (GAIN x5 à x10)
+───────────────────────────────────────────── */
+let browser;
+
+async function getBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
+  return browser;
+}
+
+/* ─────────────────────────────────────────────
+   🎨 ROUTE DE RENDU
+───────────────────────────────────────────── */
 app.post("/render", async (req, res) => {
   const { grid } = req.body;
 
@@ -11,66 +28,112 @@ app.post("/render", async (req, res) => {
     return res.status(400).json({ error: "grid must be an array" });
   }
 
+  const rows = grid.length;
+  const cols = grid[0].length;
+
+  /* ─────────────────────────────────────────────
+     📄 TEMPLATE HTML (fond TRANSPARENT)
+  ───────────────────────────────────────────── */
   const html = `
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-<meta charset="utf-8" />
-<style>
-  body {
-    margin: 0;
-    background: #121212;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(${grid[0].length}, 64px);
-    grid-gap: 6px;
-    padding: 20px;
-  }
-  .cell img {
-    width: 64px;
-    height: 64px;
-    image-rendering: crisp-edges;
-  }
-</style>
+  <meta charset="utf-8" />
+  <style>
+    :root {
+      --cell: 80px;
+      --gap: 6px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+    }
+
+    body {
+      display: inline-block;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(${cols}, var(--cell));
+      gap: var(--gap);
+    }
+
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+    }
+
+    .cell img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      image-rendering: pixelated;
+    }
+  </style>
 </head>
+
 <body>
   <div class="grid">
-    ${grid.flat().map(url => `
+    ${grid
+      .flat()
+      .map(
+        (url) => `
       <div class="cell">
-        <img 
-      src="${url}"
-      onerror="this.onerror=null;this.src='https://cdn.discordapp.com/emojis/1432095835692470427.webp'"
-    />
+        <img src="${url}" onerror="this.src='${grid[0][0]}'" />
       </div>
-    `).join("")}
+    `
+      )
+      .join("")}
   </div>
 </body>
 </html>
 `;
 
-  const browser = await puppeteer.launch({
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  /* ─────────────────────────────────────────────
+     🚀 PUPPETEER (RAPIDE)
+  ───────────────────────────────────────────── */
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+
+  // 🔥 viewport EXACT = pas de fond noir inutile
+  await page.setViewport({
+    width: cols * 80,
+    height: rows * 80,
+    deviceScaleFactor: 2,
   });
 
-  const page = await browser.newPage();
   await page.setContent(html, { waitUntil: "networkidle0" });
 
-  const buffer = await page.screenshot({ type: "png" });
-  await browser.close();
+  const buffer = await page.screenshot({
+    type: "png",
+    omitBackground: true, // ⛔ enlève le noir
+  });
+
+  await page.close(); // IMPORTANT (sinon fuite mémoire)
 
   res.setHeader("Content-Type", "image/png");
   res.send(buffer);
 });
 
+/* ─────────────────────────────────────────────
+   🧪 ROUTE TEST
+───────────────────────────────────────────── */
 app.get("/", (_, res) => {
   res.send("Nexordle Renderer OK");
 });
 
+/* ─────────────────────────────────────────────
+   🌐 PORT (Fly.io)
+───────────────────────────────────────────── */
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log("Renderer listening on port", port);
 });
+
