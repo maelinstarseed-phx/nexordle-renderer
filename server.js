@@ -22,27 +22,32 @@ async function getBrowser() {
    🎨 ROUTE DE RENDU
 ───────────────────────────────────────────── */
 app.post("/render", async (req, res) => {
-  const { grid } = req.body;
+  try {
+    const { grid } = req.body;
 
-  if (!Array.isArray(grid)) {
-    return res.status(400).json({ error: "grid must be an array" });
-  }
+    // ✅ guard solide
+    if (!Array.isArray(grid) || !grid.length || !grid[0]?.length) {
+      return res.status(400).json({ error: "grid must be a 2D array" });
+    }
 
-  const rows = grid.length;
-  const cols = grid[0].length;
+    const rows = grid.length;
+    const cols = grid[0].length;
 
-  /* ─────────────────────────────────────────────
-     📄 TEMPLATE HTML (fond TRANSPARENT)
-  ───────────────────────────────────────────── */
-  const html = `
+    const CELL = 80;
+    const GAP = 6;
+
+    /* ─────────────────────────────────────────────
+       📄 TEMPLATE HTML (fond TRANSPARENT)
+    ───────────────────────────────────────────── */
+    const html = `
 <!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
   <style>
     :root {
-      --cell: 80px;
-      --gap: 6px;
+      --cell: ${CELL}px;
+      --gap: ${GAP}px;
     }
 
     * {
@@ -86,7 +91,7 @@ app.post("/render", async (req, res) => {
       .map(
         (url) => `
       <div class="cell">
-        <img src="${url}" onerror="this.src='${grid[0][0]}'" />
+        <img src="${url}" />
       </div>
     `
       )
@@ -96,30 +101,34 @@ app.post("/render", async (req, res) => {
 </html>
 `;
 
-  /* ─────────────────────────────────────────────
-     🚀 PUPPETEER (RAPIDE)
-  ───────────────────────────────────────────── */
-  const browser = await getBrowser();
-  const page = await browser.newPage();
+    /* ─────────────────────────────────────────────
+       🚀 PUPPETEER (RAPIDE)
+    ───────────────────────────────────────────── */
+    const browser = await getBrowser();
+    const page = await browser.newPage();
 
-  // 🔥 viewport EXACT = pas de fond noir inutile
-  await page.setViewport({
-    width: cols * 80,
-    height: rows * 80,
-    deviceScaleFactor: 2,
-  });
+    // ✅ VIEWPORT EXACT (cell + gaps)
+    await page.setViewport({
+      width: cols * CELL + (cols - 1) * GAP,
+      height: rows * CELL + (rows - 1) * GAP,
+      deviceScaleFactor: 2,
+    });
 
-  await page.setContent(html, { waitUntil: "networkidle0" });
+    await page.setContent(html, { waitUntil: "networkidle0" });
 
-  const buffer = await page.screenshot({
-    type: "png",
-    omitBackground: true, // ⛔ enlève le noir
-  });
+    const buffer = await page.screenshot({
+      type: "png",
+      omitBackground: true, // ⛔ enlève le noir
+    });
 
-  await page.close(); // IMPORTANT (sinon fuite mémoire)
+    await page.close(); // IMPORTANT (sinon fuite mémoire)
 
-  res.setHeader("Content-Type", "image/png");
-  res.send(buffer);
+    res.setHeader("Content-Type", "image/png");
+    res.send(buffer);
+  } catch (err) {
+    console.error("Renderer error:", err);
+    res.status(500).json({ error: "Render failed" });
+  }
 });
 
 /* ─────────────────────────────────────────────
