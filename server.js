@@ -114,7 +114,7 @@ app.post("/render", async (req, res) => {
       deviceScaleFactor: 2,
     });
 
-    await page.setContent(html, { waitUntil: "networkidle0" });
+await page.setContent(html, { waitUntil: "domcontentloaded" });
 
     const buffer = await page.screenshot({
       type: "png",
