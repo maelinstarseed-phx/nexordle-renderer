@@ -111,14 +111,15 @@ app.post("/render", async (req, res) => {
     await page.setViewport({
       width: cols * CELL + (cols - 1) * GAP,
       height: rows * CELL + (rows - 1) * GAP,
-      deviceScaleFactor: 2,
+      deviceScaleFactor: 1.5,
     });
 
-await page.setContent(html, { waitUntil: "networkidle0" });
+await page.setContent(html, { waitUntil: "domcontentloaded" });
 
     const buffer = await page.screenshot({
       type: "png",
       omitBackground: true, // ⛔ enlève le noir
+      compressionLevel: 9,
     });
 
     await page.close(); // IMPORTANT (sinon fuite mémoire)
