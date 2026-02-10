@@ -5,7 +5,8 @@ const app = express();
 app.use(express.json({ limit: "2mb" }));
 
 /* ─────────────────────────────────────────────
-   🧠 CACHE DU BROWSER (GAIN x5 à x10)
+   🧠 CACHE GLOBAL DU BROWSER
+   → Chromium reste chaud tant que la machine tourne
 ───────────────────────────────────────────── */
 let browser;
 
@@ -33,8 +34,21 @@ app.post("/render", async (req, res) => {
     const rows = grid.length;
     const cols = grid[0].length;
 
-    const CELL = 64;
-    const GAP = 6;
+    /* ─────────────────────────────────────────────
+       🧠 AUTO-ADAPTATION DISCORD MOBILE (ANTI CROP)
+       → on adapte selon la HAUTEUR, pas le device
+    ───────────────────────────────────────────── */
+    const MAX_HEIGHT = 720; // seuil safe Discord mobile
+
+    let CELL = 80;
+    let GAP  = 6;
+
+    const estimatedHeight = rows * CELL + (rows - 1) * GAP;
+
+    if (estimatedHeight > MAX_HEIGHT) {
+      CELL = 64;
+      GAP  = 4;
+    }
 
     /* ─────────────────────────────────────────────
        📄 TEMPLATE HTML (fond TRANSPARENT)
@@ -102,32 +116,28 @@ app.post("/render", async (req, res) => {
 `;
 
     /* ─────────────────────────────────────────────
-       🚀 PUPPETEER (RAPIDE)
+       🚀 PUPPETEER (OPTIMISÉ)
     ───────────────────────────────────────────── */
     const browser = await getBrowser();
     const page = await browser.newPage();
 
     // ✅ VIEWPORT EXACT (cell + gaps)
-const width = Math.min(
-  cols * CELL + (cols - 1) * GAP,
-  420
-);
+    await page.setViewport({
+      width: cols * CELL + (cols - 1) * GAP,
+      height: rows * CELL + (rows - 1) * GAP,
+      deviceScaleFactor: 1.5, // ⚡ bon compromis perf / qualité
+    });
 
-await page.setViewport({
-  width,
-  height: rows * CELL + (rows - 1) * GAP,
-  deviceScaleFactor: 2,
-});
-
-await page.setContent(html, { waitUntil: "domcontentloaded" });
+    // ⚠️ PAS de networkidle0 (trop lent)
+    await page.setContent(html, { waitUntil: "domcontentloaded" });
 
     const buffer = await page.screenshot({
       type: "png",
-      omitBackground: true, // ⛔ enlève le noir
-      compressionLevel: 9,
+      omitBackground: true,
+      compressionLevel: 9, // ⚡ PNG plus rapide et plus léger
     });
 
-    await page.close(); // IMPORTANT (sinon fuite mémoire)
+    await page.close(); // 🔒 évite les fuites mémoire
 
     res.setHeader("Content-Type", "image/png");
     res.send(buffer);
