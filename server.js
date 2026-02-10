@@ -33,7 +33,7 @@ app.post("/render", async (req, res) => {
     const rows = grid.length;
     const cols = grid[0].length;
 
-    const CELL = 80;
+    const CELL = 64;
     const GAP = 6;
 
     /* ─────────────────────────────────────────────
@@ -108,11 +108,16 @@ app.post("/render", async (req, res) => {
     const page = await browser.newPage();
 
     // ✅ VIEWPORT EXACT (cell + gaps)
-    await page.setViewport({
-      width: cols * CELL + (cols - 1) * GAP,
-      height: rows * CELL + (rows - 1) * GAP,
-      deviceScaleFactor: 1.5,
-    });
+const width = Math.min(
+  cols * CELL + (cols - 1) * GAP,
+  420
+);
+
+await page.setViewport({
+  width,
+  height: rows * CELL + (rows - 1) * GAP,
+  deviceScaleFactor: 2,
+});
 
 await page.setContent(html, { waitUntil: "domcontentloaded" });
 
