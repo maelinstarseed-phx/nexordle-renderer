@@ -1,5 +1,6 @@
 import express from "express";
 import puppeteer from "puppeteer";
+import fetch from "node-fetch";
 
 const app = express();
 app.use(express.json({ limit: "2mb" }));
@@ -20,6 +21,45 @@ async function getBrowser() {
 }
 
 /* ─────────────────────────────────────────────
+   🧠 CACHE EMOJIS (RAM)
+   → plus aucune requête réseau pendant le rendu
+───────────────────────────────────────────── */
+const emojiCache = new Map();
+
+/**
+ * Télécharge un emoji PNG et le convertit en base64
+ */
+async function loadEmoji(url) {
+  if (emojiCache.has(url)) {
+    return emojiCache.get(url);
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch emoji: ${url}`);
+  }
+
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const base64 = `data:image/png;base64,${buffer.toString("base64")}`;
+
+  emojiCache.set(url, base64);
+  return base64;
+}
+
+/**
+ * Remplace une grille d’URLs par une grille base64
+ */
+async function resolveGrid(grid) {
+  return Promise.all(
+    grid.map(row =>
+      Promise.all(
+        row.map(url => loadEmoji(url))
+      )
+    )
+  );
+}
+
+/* ─────────────────────────────────────────────
    🎨 ROUTE DE RENDU
 ───────────────────────────────────────────── */
 app.post("/render", async (req, res) => {
@@ -31,29 +71,32 @@ app.post("/render", async (req, res) => {
       return res.status(400).json({ error: "grid must be a 2D array" });
     }
 
-    const rows = grid.length;
-    const cols = grid[0].length;
+    // 🔥 conversion URLs → base64 (cache RAM)
+    const resolvedGrid = await resolveGrid(grid);
+
+    const rows = resolvedGrid.length;
+    const cols = resolvedGrid[0].length;
 
     /* ─────────────────────────────────────────────
        🧠 AUTO-ADAPTATION DISCORD MOBILE (ANTI CROP)
        → on adapte selon la HAUTEUR, pas le device
     ───────────────────────────────────────────── */
-    const MAX_HEIGHT = 720; // seuil safe Discord mobile
+    const MAX_HEIGHT = 720;
 
     let CELL = 80;
-    let GAP  = 6;
+    let GAP = 6;
 
     const estimatedHeight = rows * CELL + (rows - 1) * GAP;
 
     if (estimatedHeight > MAX_HEIGHT) {
       CELL = 64;
-      GAP  = 4;
+      GAP = 4;
     }
 
     /* ─────────────────────────────────────────────
        📄 TEMPLATE HTML (fond TRANSPARENT)
     ───────────────────────────────────────────── */
- const html = `
+    const html = `
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -100,12 +143,12 @@ app.post("/render", async (req, res) => {
 
 <body>
   <div class="grid">
-    ${grid
+    ${resolvedGrid
       .flat()
       .map(
-        (url) => `
+        (src) => `
       <div class="cell">
-        <img src="${url}" />
+        <img src="${src}" />
       </div>
     `
       )
@@ -114,6 +157,7 @@ app.post("/render", async (req, res) => {
 </body>
 </html>
 `;
+
     /* ─────────────────────────────────────────────
        🚀 PUPPETEER (OPTIMISÉ)
     ───────────────────────────────────────────── */
@@ -124,34 +168,37 @@ app.post("/render", async (req, res) => {
     await page.setViewport({
       width: cols * CELL + (cols - 1) * GAP,
       height: rows * CELL + (rows - 1) * GAP,
-      deviceScaleFactor: 1.5, // ⚡ bon compromis perf / qualité
+      deviceScaleFactor: 1.5,
     });
 
-    // ⚠️ PAS de networkidle0 (trop lent)
-await page.setContent(html, { waitUntil: "domcontentloaded" });
+    // ⚠️ PAS de networkidle0
+    await page.setContent(html, { waitUntil: "domcontentloaded" });
 
-// ⏳ attendre que TOUTES les images soient chargées
-await page.evaluate(async () => {
-  const imgs = Array.from(document.images);
-  await Promise.all(
-    imgs.map(
-      img =>
-        img.complete ||
-        new Promise(resolve => {
-          img.onload = resolve;
-          img.onerror = resolve;
-        })
-    )
-  );
-});
+    // ⏳ sécurité : attendre que les images soient prêtes
+    await page.evaluate(async () => {
+      const imgs = Array.from(document.images);
+      await Promise.race([
+        Promise.all(
+          imgs.map(
+            img =>
+              img.complete ||
+              new Promise(resolve => {
+                img.onload = resolve;
+                img.onerror = resolve;
+              })
+          )
+        ),
+        new Promise(resolve => setTimeout(resolve, 2000)),
+      ]);
+    });
 
-const buffer = await page.screenshot({
-  type: "png",
-  omitBackground: true,
-  compressionLevel: 9,
-});
+    const buffer = await page.screenshot({
+      type: "png",
+      omitBackground: true,
+      compressionLevel: 9,
+    });
 
-    await page.close(); // 🔒 évite les fuites mémoire
+    await page.close();
 
     res.setHeader("Content-Type", "image/png");
     res.send(buffer);
