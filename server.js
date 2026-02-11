@@ -128,13 +128,28 @@ app.post("/render", async (req, res) => {
     });
 
     // ⚠️ PAS de networkidle0 (trop lent)
-    await page.setContent(html, { waitUntil: "domcontentloaded" });
+await page.setContent(html, { waitUntil: "domcontentloaded" });
 
-    const buffer = await page.screenshot({
-      type: "png",
-      omitBackground: true,
-      compressionLevel: 9, // ⚡ PNG plus rapide et plus léger
-    });
+// ⏳ attendre que TOUTES les images soient chargées
+await page.evaluate(async () => {
+  const imgs = Array.from(document.images);
+  await Promise.all(
+    imgs.map(
+      img =>
+        img.complete ||
+        new Promise(resolve => {
+          img.onload = resolve;
+          img.onerror = resolve;
+        })
+    )
+  );
+});
+
+const buffer = await page.screenshot({
+  type: "png",
+  omitBackground: true,
+  compressionLevel: 9,
+});
 
     await page.close(); // 🔒 évite les fuites mémoire
 
