@@ -53,64 +53,14 @@ app.post("/render", async (req, res) => {
     /* ─────────────────────────────────────────────
        📄 TEMPLATE HTML (fond TRANSPARENT)
     ───────────────────────────────────────────── */
-    const html = `
+   const html = `
 <!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <style>
-    :root {
-      --cell: ${CELL}px;
-      --gap: ${GAP}px;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: transparent;
-    }
-
-    body {
-      display: inline-block;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(${cols}, var(--cell));
-      gap: var(--gap);
-    }
-
-    .cell {
-      width: var(--cell);
-      height: var(--cell);
-    }
-
-    .cell img {
-      width: 100%;
-      height: 100%;
-      display: block;
-      image-rendering: pixelated;
-    }
-  </style>
-</head>
-
-<body>
-  <div class="grid">
-    ${grid
-      .flat()
-      .map(
-        (url) => `
-      <div class="cell">
-        <img src="${url}" />
-      </div>
-    `
-      )
-      .join("")}
-  </div>
+<html>
+<body style="
+  width: 300px;
+  height: 300px;
+  background: red;
+">
 </body>
 </html>
 `;
